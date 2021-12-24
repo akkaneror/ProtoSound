@@ -2,19 +2,16 @@ package com.makeability.protosound.utils;
 
 import android.app.Application;
 import android.content.Context;
+import android.os.Debug;
 import android.os.Handler;
 import android.os.Looper;
-import android.os.Message;
 import android.util.Log;
 import android.widget.Toast;
-
-import androidx.annotation.NonNull;
 
 import org.apache.commons.csv.CSVFormat;
 import org.apache.commons.csv.CSVParser;
 import org.apache.commons.csv.CSVPrinter;
 import org.apache.commons.csv.CSVRecord;
-import org.apache.commons.io.FileUtils;
 import org.json.JSONArray;
 import org.json.JSONObject;
 import org.pytorch.IValue;
@@ -30,14 +27,9 @@ import java.io.FileWriter;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
-import java.io.OutputStreamWriter;
 import java.io.Reader;
 import java.io.Writer;
 import java.lang.reflect.Array;
-import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.text.DecimalFormat;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -48,11 +40,11 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicReference;
 
 
 public class ProtoApp extends Application {
     private static final String TAG = "ProtoApp";
-    private boolean appRunFirstTime = false;
     private Module mModuleEncoder;
 
     private final int RATE = 44100;
@@ -67,7 +59,6 @@ public class ProtoApp extends Application {
 
     private String USER_LOCATION_FILE;
 
-    private Map<String, Integer> c2i;
     private Map<Integer, String> i2c;
     private float[][] meanSupportEmbeddings;
     private String location;
@@ -75,20 +66,16 @@ public class ProtoApp extends Application {
     private float[] bufferArray = new float[WAYS];
 
 
-    private void generateCSV(Map<String, Integer> labelsDict, int[] predefinedSamples) throws IOException {
+    private void generateCSV(Map<String, Integer> labelsDict) throws IOException {
         List<String> categories = new ArrayList<>(labelsDict.keySet());
-        c2i = new HashMap<>();
         i2c = new HashMap<>();
-
         int i = 0;
         for (String category : categories) {
-            c2i.put(category, i);
             i2c.put(i, category);
             i++;
         }
 
         List<String> name = new ArrayList<>();
-        List<Integer> fold = new ArrayList<>();
         List<String> category = new ArrayList<>();
 
         boolean useUserData = false;
@@ -107,6 +94,7 @@ public class ProtoApp extends Application {
             Log.d(TAG, "PATH " + path);
             File dir = new File(path);
             File[] fileList = dir.listFiles();
+            assert fileList != null;
             for (File file : fileList) {
                 String fileName = file.getName().toLowerCase();
                 if (fileName.endsWith(".wav")) {
@@ -114,31 +102,14 @@ public class ProtoApp extends Application {
                         Log.d(TAG, "skip " + useUserData + " location " + fileName);
                         continue;
                     }
-//
-//                    if (useUserData && !fileName.contains(location.toLowerCase())) {
-//                        Log.d(TAG, "skip " + useUserData + " location " + fileName);
-//                        continue;
-//                    }
-
-//                    if (!useUserData && !fileName.contains("lib")) {
-//                        Log.d(TAG, "skip " + useUserData + " location " + fileName);
-//                        continue;
-//                    }
-                    //Log.d(TAG, "USE_USER_DATA, " + useUserData + " location " + fileName);
-                    String filePath = path + "/" + fileName;
-                    // CODE FOR NOT EXIST OUTPUT_PATH_DIR
 
                     category.add(eaDir);
                     name.add(fileName);
                     if (csvIndex == categories.size() + 1) {
                         csvIndex = 1;
                     }
-                    fold.add(csvIndex);
                     csvIndex++;
-//                    // COPY from library to meta-test-data
-//                    File src = new File(filePath);
-//                    File dst = new File(DATA_PATH);
-//                    FileUtils.copyToDirectory(src, dst);
+
                 }
             }
             useUserData = false;
@@ -173,7 +144,6 @@ public class ProtoApp extends Application {
                 backgroundNoise[i] = backgroundNoiseList.get(i) / 32768.0;
             }
 
-            Log.d(TAG, "BACKGROUNDNOISE " + Arrays.toString(backgroundNoise));
 
             backgroundNoise = Arrays.copyOfRange(backgroundNoise, 700, backgroundNoise.length);
 
@@ -190,7 +160,7 @@ public class ProtoApp extends Application {
             }
 
             String userLocationDir = USER_LIBRARY_PATH + "/" + location;
-            // IF CURRENTDIR NOT EXIST MAKE IT
+
             File dir = new File(userLocationDir);
             if (!dir.exists()) {
                 dir.mkdir();
@@ -202,21 +172,18 @@ public class ProtoApp extends Application {
                 }
                 String label = labels[Math.floorDiv(i, 5)];
 
-                String userSoundDir = userLocationDir +  "/" + label;
-                // IF CURRENTDIR NOT EXIST MAKE IT
+                String userSoundDir = userLocationDir + "/" + label;
+
                 File dir2 = new File(userSoundDir);
                 if (!dir2.exists()) {
                     dir2.mkdir();
                 }
 
-
-                // Data_i
-//                Log.d(TAG, "CURRENT DIR " + currentDir);
-//                Log.d(TAG, "CURRENT DATA_: " + i);
                 double[] data = new double[map.get(i).size()];
                 List<Short> dataList = map.get(i);
 
                 for (int j = 0; j < data.length; j++) {
+                    assert dataList != null;
                     data[j] = dataList.get(j) / 32768.0;
                 }
 
@@ -244,61 +211,60 @@ public class ProtoApp extends Application {
             // GENERATE CSV
             Log.d(TAG, "Generate CSV file and put 25 samples into one single folder");
             try {
-                generateCSV(labelsDict, predefinedSamples);
+                generateCSV(labelsDict);
             } catch (IOException e) {
                 e.printStackTrace();
             }
 
             // LOAD DATA
-            Set<String> labels2 = new LinkedHashSet<>();    // LinkedHashSet preserves order
             float[][][][] data = new float[25][1][128][87];
-            int i = 0;
             try (Reader reader = new FileReader(DATA_CSV_PATH);
                  CSVParser csvParser = new CSVParser(reader, CSVFormat.DEFAULT.withFirstRecordAsHeader().withIgnoreHeaderCase().withTrim())) {
-                String dataPathDir;
-                for (CSVRecord record : csvParser) {
-                    if (record.get("predefinedType").equals("1")) {
-                        dataPathDir = LIBRARY_DATA_PATH;
+                AtomicReference<String> dataPathDir = new AtomicReference<>();
+                List<CSVRecord> records = csvParser.getRecords();
+                List<Thread> threads = new ArrayList<>();
+                for (int j = 0; j < 5; j++) {
+                    int finalJ = j;
+                    if (records.get(j * 5).get("predefinedType").equals("1")) {
+                        dataPathDir.set(LIBRARY_DATA_PATH);
                     } else {
-                        dataPathDir = USER_LIBRARY_PATH + "/" + location;
+                        dataPathDir.set(USER_LIBRARY_PATH + "/" + location);
                     }
-                    //String filePath = DATA_PATH + "/" + record.get("filename");
-                    String filePath = dataPathDir + "/" + record.get("category") + "/" + record.get("filename");
+                    Thread t = new Thread(() -> {
+                        for (int k = finalJ * 5; k < finalJ * 5 + 5; k++) {
+                            String filePath = dataPathDir + "/" + records.get(k).get("category") + "/" + records.get(k).get("filename");
+                            float[][] specScaled = new float[0][];
+                            try {
+                                specScaled = AudioExtraction.specToImage(AudioExtraction.getMelSpectrogramDb(filePath));
+                            } catch (Exception e) {
+                                e.printStackTrace();
+                            }
+                            float[][][] arr = new float[1][128][87];
+                            arr[0] = specScaled;
+                            data[k] = arr;
+                        }
+                        i2c.put(finalJ, records.get(finalJ * 5).get("category"));
+                    });
+                    t.start();
+                    threads.add(t);
+                }
 
-                    float[][] specScaled = ML.specToImage(ML.getMelSspectrogramDb(filePath));
-                    float[][][] arr = new float[1][128][87];
-                    arr[0] = specScaled;
-
-                    data[i] = arr;
-                    labels2.add(record.get("category"));
-                    i++;
+                for (Thread t: threads) {
+                    t.join();
                 }
 
             } catch (Exception e) {
                 e.printStackTrace();
             }
-            i = 0;
-            for (String label : labels2) {
-                i2c.put(i, label);
-                i++;
-                Log.d(TAG, "LABEL " + label);
-            }
-
-            //Log.d(TAG, "SHAPE IS " + data.length + " " + data[0].length + " " + data[0][0].length + " " + data[0][0][0].length);
-
             Tensor inputTensor = Tensor.fromBlob(flatten(data), new long[]{data.length, data[0].length, data[0][0].length, data[0][0][0].length});
             Tensor outputTensor = mModuleEncoder.forward(IValue.from(inputTensor)).toTensor();
+
             long[] outputShape = outputTensor.shape();
-            //Log.d(TAG, "OUTPUT IS " + outputTensor);
+            float[][] supportEmbeddings = new float[(int) outputShape[0]][(int) outputShape[1]];
 
             float[] outputArr = outputTensor.getDataAsFloatArray();
-
-            int arrDim = outputShape.length;
-            float[][] supportEmbeddings = new float[(int) outputShape[0]][(int) outputShape[1]];
             for (int j = 0; j < supportEmbeddings.length; j++) {
-                for (int k = 0; k < supportEmbeddings[0].length; k++) {
-                    supportEmbeddings[j][k] = outputArr[(j * supportEmbeddings[0].length) + k];
-                }
+                System.arraycopy(outputArr, (j * supportEmbeddings[0].length), supportEmbeddings[j], 0, supportEmbeddings[0].length);
             }
 
             meanSupportEmbeddings = new float[WAYS][supportEmbeddings[0].length];
@@ -312,6 +278,7 @@ public class ProtoApp extends Application {
                     meanSupportEmbeddings[j][k] = mean;
                 }
             }
+
         } catch (Exception e) {
             e.printStackTrace();
         }
@@ -326,8 +293,6 @@ public class ProtoApp extends Application {
                         Toast.makeText(getApplicationContext(), "No training happened! Please train the model first.", Toast.LENGTH_SHORT).show();
                     }
                 });
-
-                Log.d(TAG, "NO TRAINING HAPPENED YET");
                 return null;
             }
             if (db < 30.0) return null;
@@ -356,7 +321,7 @@ public class ProtoApp extends Application {
                 bufferCounter = 0;
                 bufferArray = new float[5];
             }
-            float[][] specScaled = ML.specToImage(ML.getMelSspectrogramDb(queryFile));
+            float[][] specScaled = AudioExtraction.specToImage(AudioExtraction.getMelSpectrogramDb(queryFile));
 
             float[][][][] arr = new float[1][1][128][87];
             arr[0][0] = specScaled;
@@ -414,13 +379,11 @@ public class ProtoApp extends Application {
                     Log.d(TAG, "Exit due to R= " + ratio + " which is > threshold of " + THRESHOLD);
                     return null;
                 }
-                Log.d(TAG, "Making prediction...");
                 List<String> result = new ArrayList<>();
                 result.add(i2c.get(bestIndex)); // label
                 result.add(new DecimalFormat("#").format(Math.round((1 - ratio) * 100)));
                 result.add(dbStr);
                 Log.d(TAG, "PREDICTION LABEL " + result.get(0));
-                //Log.d(TAG, "AVG BEST CONFIDENCE " + result.get(1));
                 return result;
             }
             return null;
@@ -451,7 +414,7 @@ public class ProtoApp extends Application {
     static void flatten(Object object, List<Float> list) {
         if (object.getClass().isArray())
             for (int i = 0; i < Array.getLength(object); ++i)
-                flatten(Array.get(object, i), list);
+                flatten(Objects.requireNonNull(Array.get(object, i)), list);
         else
             list.add((float) object);
     }
@@ -560,19 +523,18 @@ public class ProtoApp extends Application {
         if (mModuleEncoder == null) {
             moduleFileAbsoluteFilePath = INTERNAL_STORAGE + "/protosound_10_classes_scripted.pt";
             moveAssetToStorage(this, "protosound_10_classes_scripted.pt");
-            mModuleEncoder = Module.load(moduleFileAbsoluteFilePath);	// Have a ScriptModule now
+            mModuleEncoder = Module.load(moduleFileAbsoluteFilePath);    // Have a ScriptModule now
         }
-        appRunFirstTime = false;
     }
 
     private String makeDir(String dirName) {
         File dir = new File(dirName);
         if (!dir.exists()) {
             dir.mkdir();
-            appRunFirstTime = true;
         }
         return dirName;
     }
+
     public Module getModule() {
         return mModuleEncoder;
     }
@@ -581,10 +543,6 @@ public class ProtoApp extends Application {
     // of folder "library" (can use recursion to support other folder structures)
     // Otherwise, it supports files normally
     public void moveAssetToStorage(Context context, String assetName) {
-        if (!appRunFirstTime) {
-            Log.d(TAG, "ALREADY CREATED");
-            return;
-        }
         try {
             String[] numFiles = context.getAssets().list(assetName);   // list out library
             if (numFiles.length > 0) {  // A folder. Only library folder in assets
@@ -608,7 +566,7 @@ public class ProtoApp extends Application {
     }
 
 
-    private void writeAssetFileToStorage(Context context, String inFile, String outFile){
+    private void writeAssetFileToStorage(Context context, String inFile, String outFile) {
         File file = new File(outFile);
         // If file already exists in internal storage, skip
         if (file.exists() && file.length() > 0) {

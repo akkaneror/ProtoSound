@@ -95,16 +95,16 @@ public class AudioFeatureExtraction {
         n_mfcc = n_mfccVal;
     }
 
-    /**
-     * This function extract MFCC values from given Audio Magnitude Values.
-     *
-     * @param doubleInputBuffer
-     * @return
-     */
-    public float[] extractMFCCFeatures(float[] doubleInputBuffer) {
-        final double[][] mfccResult = dctMfcc(doubleInputBuffer);
-        return finalshape(mfccResult);
-    }
+//    /**
+//     * This function extract MFCC values from given Audio Magnitude Values.
+//     *
+//     * @param doubleInputBuffer
+//     * @return
+//     */
+//    public float[] extractMFCCFeatures(float[] doubleInputBuffer) {
+//        final double[][] mfccResult = dctMfcc(doubleInputBuffer);
+//        return finalshape(mfccResult);
+//    }
 
     /**
      * This function converts 2D MFCC values into 1d
@@ -130,19 +130,19 @@ public class AudioFeatureExtraction {
      * @param y
      * @return
      */
-    private double[][] dctMfcc(float[] y) {
-        final double[][] specTroGram = powerToDb(melSpectrogram(y));
-        final double[][] dctBasis = dctFilter(n_mfcc, n_mels);
-        double[][] mfccSpecTro = new double[n_mfcc][specTroGram[0].length];
-        for (int i = 0; i < n_mfcc; i++) {
-            for (int j = 0; j < specTroGram[0].length; j++) {
-                for (int k = 0; k < specTroGram.length; k++) {
-                    mfccSpecTro[i][j] += dctBasis[i][k] * specTroGram[k][j];
-                }
-            }
-        }
-        return mfccSpecTro;
-    }
+//    private double[][] dctMfcc(float[] y) {
+//        final double[][] specTroGram = powerToDb(melSpectrogram(y));
+//        final double[][] dctBasis = dctFilter(n_mfcc, n_mels);
+//        double[][] mfccSpecTro = new double[n_mfcc][specTroGram[0].length];
+//        for (int i = 0; i < n_mfcc; i++) {
+//            for (int j = 0; j < specTroGram[0].length; j++) {
+//                for (int k = 0; k < specTroGram.length; k++) {
+//                    mfccSpecTro[i][j] += dctBasis[i][k] * specTroGram[k][j];
+//                }
+//            }
+//        }
+//        return mfccSpecTro;
+//    }
 
     /**
      * This function generates mel spectrogram values
@@ -360,12 +360,12 @@ public class AudioFeatureExtraction {
     }
 
 
-    /**
-     * This function extracts the inverse STFT values as complex values
-     *
-     * @param y
-     * @return
-     */
+//    /**
+//     * This function extracts the inverse STFT values as complex values
+//     *
+//     * @param y
+//     * @return
+//     */
 
     public float [] extractInvSTFTFeaturesAsFloatValues(Complex[][] cmplxSTFTValues, boolean paddingFlag){
 
@@ -473,12 +473,12 @@ public class AudioFeatureExtraction {
         return fftWin2D;
     }
 
-    /**
-     * This function pads the y values
-     *
-     * @param y
-     * @return
-     */
+//    /**
+//     * This function pads the y values
+//     *
+//     * @param y
+//     * @return
+//     */
 
     private double[][] padFrame(float[] yValues, boolean paddingFlag){
 
@@ -613,19 +613,19 @@ public class AudioFeatureExtraction {
      * @param melS
      * @return
      */
-    public double[][] powerToDb(double[][] melS) {
+    public float[][] powerToDb(float[][] melS) {
         // Convert a power spectrogram (amplitude squared) to decibel (dB) units
         // This computes the scaling ``10 * log10(S / ref)`` in a numerically
         // stable way.
-        double[][] log_spec = new double[melS.length][melS[0].length];
+        float[][] log_spec = new float[melS.length][melS[0].length];
         double maxValue = -100;
         for (int i = 0; i < melS.length; i++) {
             for (int j = 0; j < melS[0].length; j++) {
                 double magnitude = Math.abs(melS[i][j]);
                 if (magnitude > 1e-10) {
-                    log_spec[i][j] = 10.0 * log10(magnitude);
+                    log_spec[i][j] = (float) (10.0 * log10(magnitude));
                 } else {
-                    log_spec[i][j] = 10.0 * (-10);
+                    log_spec[i][j] = (float) (10.0 * (-10));
                 }
                 if (log_spec[i][j] > maxValue) {
                     maxValue = log_spec[i][j];
@@ -637,7 +637,7 @@ public class AudioFeatureExtraction {
         for (int i = 0; i < melS.length; i++) {
             for (int j = 0; j < melS[0].length; j++) {
                 if (log_spec[i][j] < maxValue - 80.0) {
-                    log_spec[i][j] = maxValue - 80.0;
+                    log_spec[i][j] = (float) (maxValue - 80.0);
                 }
             }
         }

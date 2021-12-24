@@ -1,28 +1,19 @@
 package com.makeability.protosound.utils;
 
-import android.util.Log;
-
-import org.apache.commons.math3.util.Precision;
-
 import java.io.File;
-import java.math.BigDecimal;
 import java.util.Arrays;
-import java.util.DoubleSummaryStatistics;
-import java.util.IntSummaryStatistics;
-import java.util.stream.Collectors;
 
-public class ML {
+public class AudioExtraction {
 
 
-    private static final String TAG = "ML";
+    private static final String TAG = "AudioExtraction";
 
-    public static double[][] getMelSspectrogramDb(String filePath) throws Exception{
+    public static float[][] getMelSpectrogramDb(String filePath) throws Exception {
         WavFile readWavFile = WavFile.openWavFile(new File(filePath));
         final int BUF_SIZE = (int) readWavFile.getNumFrames();
-        float[] wav = new float[BUF_SIZE * 1];
+        float[] wav = new float[BUF_SIZE];
         int framesRead;
-        do
-        {
+        do {
             framesRead = readWavFile.readFrames(wav, BUF_SIZE);
 
         }
@@ -31,7 +22,7 @@ public class ML {
         readWavFile.close();
 
         if (wav.length < 44100) {
-            wav = pad_reflect(wav, (int) Math.ceil((44100 - wav.length)/ 2.0));
+            wav = pad_reflect(wav, (int) Math.ceil((44100 - wav.length) / 2.0));
         } else {
             wav = Arrays.copyOfRange(wav, 0, 44100);
         }
@@ -43,15 +34,7 @@ public class ML {
         mfccConvert.setHop_length(512);
         mfccConvert.setfMin(20);
         mfccConvert.setfMax(8300);
-        float[][] spec2 = mfccConvert.melSpectrogramWithComplexValueProcessing(wav);
-
-        double[][] spec = new double[spec2.length][spec2[0].length];
-        for (int i = 0; i < spec2.length; i++) {
-            for (int j = 0; j < spec2[0].length; j++) {
-                spec[i][j] =  spec2[i][j];
-            }
-        }
-
+        float[][] spec = mfccConvert.melSpectrogramWithComplexValueProcessing(wav);
         spec = mfccConvert.powerToDb(spec);
         return spec;
     }
@@ -96,35 +79,43 @@ public class ML {
     }
 
 
-    public static float[][] specToImage(double[][] spec) {
+    public static float[][] specToImage(float[][] spec) {
         int n = spec.length;
         int m = spec[0].length;
         float avg = 0.0f;
         float variance = 0.0f;
-        for (int i = 0; i < n; i++)
+        for (float[] floats : spec)
             for (int j = 0; j < m; j++)
-                avg += (float) spec[i][j];
+                avg += floats[j];
         avg /= n * m;
-        for (int i = 0; i < n; i++)
+        for (float[] floats : spec)
             for (int j = 0; j < m; j++)
-                variance += Math.pow((spec[i][j] - avg), 2);
+                variance += Math.pow((floats[j] - avg), 2);
         variance /= n * m;
-        float stdev = (float) Math.sqrt(variance);
+        float stddev = (float) Math.sqrt(variance);
 
         for (int i = 0; i < n; i++)
             for (int j = 0; j < m; j++)
-                spec[i][j] =  ((spec[i][j] - avg) / (stdev + 1E-6));
+                spec[i][j] = (float) ((spec[i][j] - avg) / (stddev + 1E-6));
 
-        double max =  Arrays.stream(spec).flatMapToDouble(Arrays::stream).max().getAsDouble();
-        double min =  Arrays.stream(spec).flatMapToDouble(Arrays::stream).min().getAsDouble();
+        float max = Float.MIN_VALUE;
+        float min = Float.MAX_VALUE;
+        for (float[] floats : spec) {
+            for (int j = 0; j < spec[0].length; j++) {
+                if (floats[j] > max) {
+                    max = floats[j];
+                }
+                if (floats[j] < min) {
+                    min = floats[j];
+                }
+            }
+        }
 
-        float[][] res = new float[n][m];
         for (int i = 0; i < n; i++)
             for (int j = 0; j < m; j++) {
-                int val = (int) (255f * ((float)spec[i][j] - (float)min) / (max - min));
-                res[i][j] = (float) val;
+                spec[i][j] = 255f * (spec[i][j] - min) / (max - min);
             }
 
-        return res;
+        return spec;
     }
 }

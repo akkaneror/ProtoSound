@@ -262,7 +262,6 @@ public class MainActivity extends AppCompatActivity {
 	@Subscribe(threadMode = ThreadMode.MAIN)
 	public void onReceiveTrainingComplete (DashboardFragment event){
 		Log.i(TAG, "Received training complete!");
-		Log.i(TAG, "Received audio label event");
 
 		Button submitButton = (Button) findViewById(R.id.submit);
 		ProgressBar progressBar = findViewById(R.id.progressBar);
