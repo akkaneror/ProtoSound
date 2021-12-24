@@ -89,6 +89,5 @@ Drop us a note if you are using or plan to use ProtoSound for research purposes.
 ## Related Work ##  
 --------  
 - [SoundWatch](https://makeabilitylab.cs.washington.edu/project/soundwatch/): SoundWatch: Exploring Smartwatch-based Deep Learning Approaches to Support Sound Awareness for Deaf and Hard of Hearing Users
-{"mode":"full","isActive":false}
+
 - [HomeSound](https://makeabilitylab.cs.washington.edu/project/smarthomedhh/): An Iterative Field Deployment of an In-Home Sound Awareness System for Deaf or Hard of Hearing Users  
-{"mode":"full","isActive":false}
